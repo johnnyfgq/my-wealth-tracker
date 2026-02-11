@@ -60,6 +60,7 @@
         /* 滑动条样式 */
         input[type="range"] {
             -webkit-appearance: none;
+            appearance: none;
             width: 100%;
             height: 6px;
             border-radius: 5px;
@@ -416,6 +417,27 @@
                     </select>
                 </div>
                 
+                <!-- 货币类型 -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">计价货币</label>
+                    <select id="inputCurrency" onchange="onCurrencyChange()" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-4 py-3 text-white focus:border-amber-500 focus:outline-none">
+                        <option value="CNY">人民币 (¥)</option>
+                        <option value="USD">美元 ($)</option>
+                        <option value="HKD">港币 (HK$)</option>
+                    </select>
+                </div>
+                
+                <!-- 资产类别 -->
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">资产类别</label>
+                    <select id="inputAssetCategory" onchange="onAssetCategoryChange()" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-4 py-3 text-white focus:border-amber-500 focus:outline-none">
+                        <option value="cash">现金与等现金</option>
+                        <option value="equity" selected>权益类</option>
+                        <option value="fixedIncome">固定收益</option>
+                        <option value="alternative">另类资产</option>
+                    </select>
+                </div>
+                
                 <!-- 交易类型 -->
                 <div>
                     <label class="block text-sm text-gray-400 mb-2">交易类型</label>
@@ -471,6 +493,21 @@
                     <input type="number" id="inputQuantity" step="0.01" min="0" placeholder="例: 10000" required>
                 </div>
                 
+                <!-- 银行定存专属字段 -->
+                <div id="fixedIncomeOptions" class="p-4 bg-purple-500/10 border border-purple-500/30 rounded-xl" style="display: none;">
+                    <div class="text-sm text-purple-400 mb-3">定存/理财专属</div>
+                    <div class="space-y-3">
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">到期日（可选）</label>
+                            <input type="date" id="inputMaturityDate" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs text-gray-400 mb-1">年化利率 %（可选）</label>
+                            <input type="number" id="inputAnnualRate" step="0.01" min="0" max="100" placeholder="例: 2.5" class="w-full bg-gray-800/80 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                        </div>
+                    </div>
+                </div>
+                
                 <!-- 国内基金专属：净值更新方式 -->
                 <div id="fundOptions" class="p-4 bg-blue-500/10 border border-blue-500/30 rounded-xl">
                     <div class="text-sm text-blue-400 mb-3">国内基金设置</div>
@@ -490,6 +527,10 @@
                 <div class="p-4 bg-gray-800/50 rounded-xl border border-gray-700">
                     <div class="text-xs text-gray-500 mb-1">交易成本</div>
                     <div class="text-2xl font-bold gradient-text" id="transactionCostPreview">¥0</div>
+                    <!-- 汇率折算提示 -->
+                    <div id="currencyConversionHint" class="text-xs text-gray-500 mt-2" style="display: none;">
+                        约合 <span id="convertedAmountCNY" class="text-emerald-400 font-semibold"></span>
+                    </div>
                 </div>
                 
                 <!-- 按钮 -->
@@ -517,6 +558,16 @@
                 </button>
             </div>
             <div class="mt-6 max-w-2xl mx-auto">
+                <!-- 本位币切换按钮 -->
+                <div class="flex justify-center gap-2 mb-4">
+                    <button id="btnCNY" onclick="switchBaseCurrency('CNY')" class="px-4 py-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold transition">
+                        ¥ 人民币
+                    </button>
+                    <button id="btnUSD" onclick="switchBaseCurrency('USD')" class="px-4 py-2 rounded-lg bg-gray-800/50 text-gray-500 border border-gray-700 font-semibold transition">
+                        $ 美元
+                    </button>
+                </div>
+                
                 <div class="flex justify-between text-sm text-gray-400 mb-2">
                     <span>当前: <span class="text-emerald-400 font-semibold" id="currentAmount">¥0</span></span>
                     <span>目标: <span class="text-amber-400 font-semibold" id="targetAmount">¥10,000,000</span></span>
@@ -588,16 +639,35 @@
             </div>
         </div>
         
-        <!-- 图表和控制台 -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <!-- 折线图 -->
-            <div class="lg:col-span-2 chart-container">
-                <h3 class="text-xl font-semibold mb-4 text-gray-300">资产增长趋势</h3>
-                <canvas id="assetChart"></canvas>
+        <!-- 图表区域 -->
+        <div class="mb-10">
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 折线图 -->
+                <div class="chart-container">
+                    <h3 class="text-xl font-semibold mb-4 text-gray-300">资产增长趋势</h3>
+                    <canvas id="assetChart"></canvas>
+                </div>
+                
+                <!-- 饼图 -->
+                <div class="chart-container">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-semibold text-gray-300">资产分布</h3>
+                        <div class="flex gap-2">
+                            <button id="btnCategoryView" onclick="switchPieChartView('category')" class="px-3 py-1 text-xs rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 transition">
+                                按类别
+                            </button>
+                            <button id="btnCurrencyView" onclick="switchPieChartView('currency')" class="px-3 py-1 text-xs rounded-lg bg-gray-800/50 text-gray-500 border border-gray-700 transition">
+                                按币种
+                            </button>
+                        </div>
+                    </div>
+                    <canvas id="pieChart"></canvas>
+                </div>
             </div>
-            
-            <!-- 控制台 -->
-            <div class="glass-card rounded-2xl p-6">
+        </div>
+        
+        <!-- 控制台 -->
+        <div class="glass-card rounded-2xl p-6">
                 <h3 class="text-xl font-semibold mb-6 text-gray-300">投资模拟器</h3>
                 
                 <div class="mb-8">
@@ -645,20 +715,29 @@
 
     <script>
         // ============= 数据模型定义 =============
-        // 新数据模型：交易流水驱动
+        // 新数据模型：交易流水驱动 + 多币种支持
         let dataEngine = {
-            transactions: [],        // 交易流水数组
+            transactions: [],        // 交易流水数组（含 currency, assetCategory）
             holdings: {},            // 持仓明细（计算得出）
             latestPrices: {},        // 最新价格缓存 { symbol: price }
-            manualAssets: {          // 手动录入资产
-                liquid: 0,           // 流动资产（现金、存款）
-                fixed: 0             // 固定资产（房产、车辆）
+            manualAssets: {          // 手动录入资产（新格式：按四类资产+货币）
+                cash: [],            // 现金与等现金 [{ id, name, amount, currency }]
+                equity: [],          // 权益类（手动录入，极少）
+                fixedIncome: [],     // 固定收益 [{ id, name, amount, currency, maturityDate?, annualRate? }]
+                alternative: []      // 另类资产 [{ id, name, amount, currency }]
             },
-            targetAssets: 10000000,  // 目标金额
+            targetAssets: 10000000,  // 目标金额（CNY 为基准）
             returnRate: 8.0,         // 年化收益率
             apiKeys: {               // API 密钥配置
                 finnhub: ''          // Finnhub API Key（用户可配置）
-            }
+            },
+            // ===== 多币种扩展 =====
+            exchangeRates: {         // 汇率配置（1单位外币 = X人民币）
+                CNY: 1,
+                USD: 7.2,
+                HKD: 0.92
+            },
+            baseCurrency: 'CNY'      // 本位币：CNY 或 USD
         };
         
         // 默认数据配置（兼容旧版本）
@@ -686,22 +765,57 @@
             return Date.now().toString(36) + Math.random().toString(36).substr(2);
         }
         
-        // 添加交易记录
+        // 添加交易记录（支持多币种和资产类别）
         function addTransaction(transaction) {
+            // 根据市场类型推断默认货币
+            const defaultCurrency = inferCurrency(transaction.market);
+            // 根据市场类型推断默认资产类别
+            const defaultCategory = inferAssetCategory(transaction.market, transaction.assetCategory);
+            
             const newTransaction = {
                 id: generateId(),
                 date: transaction.date || new Date().toISOString().split('T')[0],
                 symbol: transaction.symbol,
                 name: transaction.name || '',
-                market: transaction.market, // 'A股'|'港股'|'美股'|'国内基金'
-                type: transaction.type,     // '买入'|'卖出'
+                market: transaction.market,     // 'A股'|'港股'|'美股'|'国内基金'
+                type: transaction.type,         // '买入'|'卖出'
                 price: parseFloat(transaction.price),
-                quantity: parseFloat(transaction.quantity)
+                quantity: parseFloat(transaction.quantity),
+                // ===== 多币种扩展 =====
+                currency: transaction.currency || defaultCurrency,           // 计价货币
+                assetCategory: transaction.assetCategory || defaultCategory, // 资产类别
+                // 定存专属字段（可选）
+                maturityDate: transaction.maturityDate || null,
+                annualRate: transaction.annualRate ? parseFloat(transaction.annualRate) : null
             };
             
             dataEngine.transactions.push(newTransaction);
             console.log('✓ 添加交易记录:', newTransaction);
             return newTransaction;
+        }
+        
+        // 根据市场推断默认货币
+        function inferCurrency(market) {
+            const currencyMap = {
+                'A股': 'CNY',
+                '国内基金': 'CNY',
+                '港股': 'HKD',
+                '美股': 'USD'
+            };
+            return currencyMap[market] || 'CNY';
+        }
+        
+        // 根据市场推断默认资产类别
+        function inferAssetCategory(market, explicitCategory) {
+            if (explicitCategory) return explicitCategory;
+            
+            const categoryMap = {
+                'A股': 'equity',
+                '港股': 'equity',
+                '美股': 'equity',
+                '国内基金': 'equity' // 默认权益类，用户可修改为其他
+            };
+            return categoryMap[market] || 'equity';
         }
         
         // 删除交易记录
@@ -715,24 +829,29 @@
             return false;
         }
         
-        // 持仓计算引擎：根据 transactions 聚合计算持仓
+        // 持仓计算引擎：根据 transactions 聚合计算持仓（支持多币种）
         function calculateHoldings() {
             const holdings = {};
             
             // 按 symbol 分组统计
             dataEngine.transactions.forEach(transaction => {
-                const { symbol, market, name, type, price, quantity } = transaction;
+                const { symbol, market, name, type, price, quantity, currency, assetCategory, maturityDate, annualRate } = transaction;
                 
                 if (!holdings[symbol]) {
                     holdings[symbol] = {
                         symbol: symbol,
                         name: name,
                         market: market,
+                        currency: currency || 'CNY',        // 计价货币
+                        assetCategory: assetCategory || 'equity', // 资产类别
                         quantity: 0,           // 净持仓数量
-                        totalCost: 0,          // 总成本
-                        avgCost: 0,            // 平均成本
-                        latestPrice: 0,        // 最新价格
-                        marketValue: 0         // 市值
+                        totalCost: 0,          // 总成本（原币）
+                        avgCost: 0,            // 平均成本（原币）
+                        latestPrice: 0,        // 最新价格（原币）
+                        marketValue: 0,        // 市值（原币）
+                        marketValueCNY: 0,     // 市值（CNY折算）
+                        maturityDate: maturityDate || null,
+                        annualRate: annualRate || null
                     };
                 }
                 
@@ -754,6 +873,8 @@
                     // 从缓存获取最新价格
                     holding.latestPrice = dataEngine.latestPrices[symbol] || holding.avgCost;
                     holding.marketValue = holding.quantity * holding.latestPrice;
+                    // 折算为 CNY
+                    holding.marketValueCNY = convertToCNY(holding.marketValue, holding.currency);
                     activeHoldings[symbol] = holding;
                 }
             }
@@ -763,36 +884,92 @@
             return activeHoldings;
         }
         
-        // 计算总资产（新逻辑）
+        // 计算总资产（多币种逻辑：统一折算为 CNY）
         function calculateTotalAssets() {
             // 先计算持仓
             calculateHoldings();
             
-            // 总资产 = Σ(持仓市值) + 手动资产
-            let totalHoldingsValue = 0;
+            // 1. 持仓市值（已在 calculateHoldings 中折算为 CNY）
+            let totalHoldingsValueCNY = 0;
             for (const symbol in dataEngine.holdings) {
-                totalHoldingsValue += dataEngine.holdings[symbol].marketValue;
+                totalHoldingsValueCNY += dataEngine.holdings[symbol].marketValueCNY;
             }
             
-            const totalAssets = totalHoldingsValue + dataEngine.manualAssets.liquid + dataEngine.manualAssets.fixed;
-            
-            // 更新到 config（向后兼容）
-            config.currentAssets = totalAssets;
-            
-            console.log('✓ 总资产计算:', {
-                持仓市值: totalHoldingsValue,
-                流动资产: dataEngine.manualAssets.liquid,
-                固定资产: dataEngine.manualAssets.fixed,
-                总资产: totalAssets
+            // 2. 手动资产（按四类聚合，折算为 CNY）
+            let totalManualAssetsCNY = 0;
+            const categories = ['cash', 'equity', 'fixedIncome', 'alternative'];
+            categories.forEach(category => {
+                if (dataEngine.manualAssets[category]) {
+                    dataEngine.manualAssets[category].forEach(asset => {
+                        totalManualAssetsCNY += convertToCNY(asset.amount, asset.currency);
+                    });
+                }
             });
             
-            return totalAssets;
+            // 3. 总资产（CNY）
+            const totalAssetsCNY = totalHoldingsValueCNY + totalManualAssetsCNY;
+            
+            // 更新到 config（向后兼容）
+            config.currentAssets = totalAssetsCNY;
+            
+            console.log('✓ 总资产计算 (CNY):', {
+                持仓市值CNY: totalHoldingsValueCNY,
+                手动资产CNY: totalManualAssetsCNY,
+                总资产CNY: totalAssetsCNY
+            });
+            
+            return totalAssetsCNY;
         }
         
         // 更新最新价格
         function updateLatestPrice(symbol, price) {
             dataEngine.latestPrices[symbol] = parseFloat(price);
             console.log(`✓ 更新 ${symbol} 最新价格:`, price);
+        }
+        
+        // ============= 汇率转换模块 =============
+        // 将任意货币金额转换为 CNY
+        function convertToCNY(amount, currency) {
+            const rate = dataEngine.exchangeRates[currency] || 1;
+            return amount * rate;
+        }
+        
+        // 将 CNY 转换为目标货币
+        function convertFromCNY(amountCNY, targetCurrency) {
+            const rate = dataEngine.exchangeRates[targetCurrency] || 1;
+            return amountCNY / rate;
+        }
+        
+        // 转换为本位币（根据 baseCurrency）
+        function convertToBaseCurrency(amount, fromCurrency) {
+            const amountCNY = convertToCNY(amount, fromCurrency);
+            if (dataEngine.baseCurrency === 'CNY') {
+                return amountCNY;
+            } else {
+                return convertFromCNY(amountCNY, dataEngine.baseCurrency);
+            }
+        }
+        
+        // 获取货币符号
+        function getCurrencySymbol(currency) {
+            const symbols = {
+                'CNY': '¥',
+                'USD': '$',
+                'HKD': 'HK$'
+            };
+            return symbols[currency] || currency;
+        }
+        
+        // 获取当前本位币符号
+        function getBaseCurrencySymbol() {
+            return getCurrencySymbol(dataEngine.baseCurrency);
+        }
+        
+        // 获取实时汇率（预留接口，未来可接入 API）
+        async function fetchExchangeRates() {
+            // TODO: 未来可接入实时汇率 API
+            console.log('汇率获取功能暂未实现，使用默认固定汇率');
+            return dataEngine.exchangeRates;
         }
         
         // ============= API 数据获取模块 =============
@@ -1052,21 +1229,27 @@
                 try {
                     const parsed = JSON.parse(savedData);
                     
-                    // 检测数据格式：新格式包含 transactions 字段
-                    if (parsed.transactions !== undefined) {
-                        // 新格式：交易流水驱动
+                    // 检测数据格式：判断是否为最新格式（manualAssets 为数组）
+                    const isLatestFormat = parsed.manualAssets && 
+                                          Array.isArray(parsed.manualAssets.cash);
+                    
+                    if (isLatestFormat) {
+                        // 最新格式：多币种 + 四类资产
                         dataEngine.transactions = parsed.transactions || [];
                         dataEngine.latestPrices = parsed.latestPrices || {};
-                        dataEngine.manualAssets = parsed.manualAssets || { liquid: 0, fixed: 0 };
+                        dataEngine.manualAssets = parsed.manualAssets || { cash: [], equity: [], fixedIncome: [], alternative: [] };
                         dataEngine.targetAssets = parsed.targetAssets || defaultData.targetAssets;
                         dataEngine.returnRate = parsed.returnRate || defaultData.returnRate;
                         dataEngine.apiKeys = parsed.apiKeys || { finnhub: '' };
+                        dataEngine.exchangeRates = parsed.exchangeRates || { CNY: 1, USD: 7.2, HKD: 0.92 };
+                        dataEngine.baseCurrency = parsed.baseCurrency || 'CNY';
                         
-                        console.log('✓ 加载新格式数据 (交易流水驱动)');
+                        console.log('✓ 加载最新格式数据 (多币种资产追踪器)');
                         console.log(`  - 交易记录: ${dataEngine.transactions.length} 条`);
-                        console.log(`  - 手动资产: 流动 ¥${dataEngine.manualAssets.liquid.toLocaleString()}, 固定 ¥${dataEngine.manualAssets.fixed.toLocaleString()}`);
+                        console.log(`  - 手动资产: 现金 ${dataEngine.manualAssets.cash.length} 项, 固定收益 ${dataEngine.manualAssets.fixedIncome.length} 项, 另类 ${dataEngine.manualAssets.alternative.length} 项`);
+                        console.log(`  - 本位币: ${dataEngine.baseCurrency}`);
                     } else {
-                        // 旧格式：静态金额模式，执行数据迁移
+                        // 旧格式：执行数据迁移
                         console.log('⚠️ 检测到旧格式数据，执行迁移...');
                         migrateOldData(parsed);
                     }
@@ -1088,27 +1271,85 @@
             calculateTotalAssets();
         }
         
-        // 旧数据迁移逻辑
+        // 旧数据迁移逻辑（支持多层级迁移）
         function migrateOldData(oldData) {
-            // 将旧的 liquidAssets 和 fixedAssets 转为 manualAssets
-            dataEngine.manualAssets.liquid = oldData.liquidAssets || defaultData.liquidAssets;
-            dataEngine.manualAssets.fixed = oldData.fixedAssets || defaultData.fixedAssets;
+            // 检测旧格式类型
+            const hasOldManualAssets = oldData.manualAssets && 
+                                      (typeof oldData.manualAssets.liquid === 'number' || 
+                                       typeof oldData.manualAssets.fixed === 'number');
+            
+            if (hasOldManualAssets) {
+                // 旧格式1：{ liquid: number, fixed: number } -> 新数组格式
+                console.log('⚠️ 检测到旧格式 manualAssets，执行迁移...');
+                
+                // liquid -> cash
+                if (oldData.manualAssets.liquid && oldData.manualAssets.liquid > 0) {
+                    dataEngine.manualAssets.cash.push({
+                        id: generateId(),
+                        name: '流动资产',
+                        amount: oldData.manualAssets.liquid,
+                        currency: 'CNY'
+                    });
+                }
+                
+                // fixed -> alternative
+                if (oldData.manualAssets.fixed && oldData.manualAssets.fixed > 0) {
+                    dataEngine.manualAssets.alternative.push({
+                        id: generateId(),
+                        name: '固定资产',
+                        amount: oldData.manualAssets.fixed,
+                        currency: 'CNY'
+                    });
+                }
+            } else if (oldData.liquidAssets !== undefined) {
+                // 旧格式2：直接在 oldData 下的 liquidAssets/fixedAssets
+                console.log('⚠️ 检测到最旧格式数据，执行迁移...');
+                
+                if (oldData.liquidAssets && oldData.liquidAssets > 0) {
+                    dataEngine.manualAssets.cash.push({
+                        id: generateId(),
+                        name: '流动资产',
+                        amount: oldData.liquidAssets,
+                        currency: 'CNY'
+                    });
+                }
+                
+                if (oldData.fixedAssets && oldData.fixedAssets > 0) {
+                    dataEngine.manualAssets.alternative.push({
+                        id: generateId(),
+                        name: '固定资产',
+                        amount: oldData.fixedAssets,
+                        currency: 'CNY'
+                    });
+                }
+            }
             
             // 旧的 riskAssets 无法直接迁移到交易流水（需要用户重新录入）
-            // 暂时作为提示信息
             if (oldData.riskAssets && oldData.riskAssets > 0) {
                 console.log(`⚠️ 检测到风险资产 ¥${oldData.riskAssets.toLocaleString()}，请手动添加交易记录`);
-                // 可选：显示提示框告知用户
             }
+            
+            // 迁移 transactions（补充缺失的 currency 和 assetCategory）
+            dataEngine.transactions = (oldData.transactions || []).map(t => {
+                if (!t.currency) {
+                    t.currency = inferCurrency(t.market);
+                }
+                if (!t.assetCategory) {
+                    t.assetCategory = inferAssetCategory(t.market, null);
+                }
+                return t;
+            });
             
             dataEngine.targetAssets = oldData.targetAssets || defaultData.targetAssets;
             dataEngine.returnRate = oldData.returnRate || defaultData.returnRate;
-            dataEngine.transactions = [];
-            dataEngine.latestPrices = {};
+            dataEngine.latestPrices = oldData.latestPrices || {};
+            dataEngine.exchangeRates = oldData.exchangeRates || { CNY: 1, USD: 7.2, HKD: 0.92 };
+            dataEngine.baseCurrency = oldData.baseCurrency || 'CNY';
             
             console.log('✓ 数据迁移完成');
-            console.log(`  - 流动资产: ¥${dataEngine.manualAssets.liquid.toLocaleString()}`);
-            console.log(`  - 固定资产: ¥${dataEngine.manualAssets.fixed.toLocaleString()}`);
+            console.log(`  - 现金资产: ${dataEngine.manualAssets.cash.length} 项`);
+            console.log(`  - 另类资产: ${dataEngine.manualAssets.alternative.length} 项`);
+            console.log(`  - 交易记录: ${dataEngine.transactions.length} 条`);
             
             // 自动保存新格式
             saveDataToStorage();
@@ -1116,21 +1357,37 @@
         
         // 使用默认数据
         function useDefaultData() {
-            // 新格式
-            dataEngine.manualAssets.liquid = defaultData.liquidAssets;
-            dataEngine.manualAssets.fixed = defaultData.fixedAssets;
+            // 新格式：多币种 + 四类资产
+            dataEngine.manualAssets = {
+                cash: [{
+                    id: generateId(),
+                    name: '流动资产',
+                    amount: defaultData.liquidAssets,
+                    currency: 'CNY'
+                }],
+                equity: [],
+                fixedIncome: [],
+                alternative: [{
+                    id: generateId(),
+                    name: '固定资产',
+                    amount: defaultData.fixedAssets,
+                    currency: 'CNY'
+                }]
+            };
             dataEngine.targetAssets = defaultData.targetAssets;
             dataEngine.returnRate = defaultData.returnRate;
             dataEngine.transactions = [];
             dataEngine.latestPrices = {};
             dataEngine.apiKeys = { finnhub: '' };
+            dataEngine.exchangeRates = { CNY: 1, USD: 7.2, HKD: 0.92 };
+            dataEngine.baseCurrency = 'CNY';
             
             // 向后兼容
             config.targetAssets = defaultData.targetAssets;
             config.returnRate = defaultData.returnRate;
         }
         
-        // 保存数据到 localStorage（新格式）
+        // 保存数据到 localStorage（多币种格式）
         function saveDataToStorage() {
             const dataToSave = {
                 transactions: dataEngine.transactions,
@@ -1139,12 +1396,14 @@
                 targetAssets: dataEngine.targetAssets,
                 returnRate: dataEngine.returnRate,
                 apiKeys: dataEngine.apiKeys,
+                exchangeRates: dataEngine.exchangeRates,
+                baseCurrency: dataEngine.baseCurrency,
                 lastUpdated: new Date().toISOString(),
-                version: '2.0' // 标记数据版本
+                version: '3.0' // 标记数据版本（多币种）
             };
             
             localStorage.setItem('investmentData', JSON.stringify(dataToSave));
-            console.log('✓ 数据已保存到 localStorage (v2.0)');
+            console.log('✓ 数据已保存到 localStorage (v3.0 多币种)');
         }
         
         // ============= Modal 弹窗控制 =============
@@ -1200,8 +1459,14 @@
             const today = new Date().toISOString().split('T')[0];
             document.getElementById('inputDate').value = today;
             
-            // 初始化市场类型
+            // 初始化默认值
+            document.getElementById('inputMarket').value = '国内基金';
+            document.getElementById('inputCurrency').value = 'CNY';
+            document.getElementById('inputAssetCategory').value = 'equity';
+            
+            // 初始化市场类型和资产类别
             onMarketChange();
+            onAssetCategoryChange();
             
             // 显示 Modal
             document.getElementById('addAssetModalOverlay').classList.add('active');
@@ -1228,6 +1493,11 @@
             const symbolLabel = document.getElementById('symbolLabel');
             const priceLabel = document.getElementById('priceLabel');
             const quantityLabel = document.getElementById('quantityLabel');
+            const currencySelect = document.getElementById('inputCurrency');
+            
+            // 根据市场类型更新货币默认值
+            const defaultCurrency = inferCurrency(market);
+            currencySelect.value = defaultCurrency;
             
             // 根据市场类型更新标签和显示
             if (market === '国内基金') {
@@ -1242,16 +1512,48 @@
                 quantityLabel.textContent = '买入股数';
             }
             
-            // 更新成本预览
+            // 更新成本预览和汇率提示
             updateTransactionCostPreview();
         }
         
-        // 实时更新交易成本预览
+        // 货币改变时的处理
+        function onCurrencyChange() {
+            updateTransactionCostPreview();
+        }
+        
+        // 资产类别改变时的处理
+        function onAssetCategoryChange() {
+            const category = document.getElementById('inputAssetCategory').value;
+            const fixedIncomeOptions = document.getElementById('fixedIncomeOptions');
+            
+            // 固定收益类别显示定存专属字段
+            if (category === 'fixedIncome') {
+                fixedIncomeOptions.style.display = 'block';
+            } else {
+                fixedIncomeOptions.style.display = 'none';
+            }
+        }
+        
+        // 实时更新交易成本预览（含汇率折算提示）
         function updateTransactionCostPreview() {
             const price = parseFloat(document.getElementById('inputPrice').value) || 0;
             const quantity = parseFloat(document.getElementById('inputQuantity').value) || 0;
+            const currency = document.getElementById('inputCurrency').value;
             const cost = price * quantity;
-            document.getElementById('transactionCostPreview').textContent = formatCurrency(cost);
+            
+            // 显示原币金额
+            const currencySymbol = getCurrencySymbol(currency);
+            document.getElementById('transactionCostPreview').textContent = currencySymbol + Math.round(cost).toLocaleString();
+            
+            // 如果是外币，显示折算提示
+            const hint = document.getElementById('currencyConversionHint');
+            if (currency !== 'CNY' && cost > 0) {
+                const costCNY = convertToCNY(cost, currency);
+                document.getElementById('convertedAmountCNY').textContent = formatCurrency(costCNY);
+                hint.style.display = 'block';
+            } else {
+                hint.style.display = 'none';
+            }
         }
         
         // 监听价格和数量变化，实时更新预览
@@ -1267,7 +1569,7 @@
             }
         });
         
-        // 保存交易记录
+        // 保存交易记录（支持多币种和定存）
         function saveTransaction(event) {
             event.preventDefault();
             
@@ -1279,6 +1581,13 @@
             const date = document.getElementById('inputDate').value;
             const price = parseFloat(document.getElementById('inputPrice').value);
             const quantity = parseFloat(document.getElementById('inputQuantity').value);
+            const currency = document.getElementById('inputCurrency').value;
+            const assetCategory = document.getElementById('inputAssetCategory').value;
+            
+            // 定存专属字段
+            const maturityDate = document.getElementById('inputMaturityDate').value || null;
+            const annualRate = document.getElementById('inputAnnualRate').value ? 
+                              parseFloat(document.getElementById('inputAnnualRate').value) : null;
             
             // 构建交易对象
             const transaction = {
@@ -1288,7 +1597,11 @@
                 name: name || symbol, // 如果没有名称，使用代码
                 date: date,
                 price: price,
-                quantity: quantity
+                quantity: quantity,
+                currency: currency,
+                assetCategory: assetCategory,
+                maturityDate: maturityDate,
+                annualRate: annualRate
             };
             
             // 添加到数据引擎
@@ -1408,26 +1721,45 @@
             updateProgress();
             
             // 更新目标金额显示
-            document.getElementById('targetAmount').textContent = '¥' + dataEngine.targetAssets.toLocaleString();
+            const targetSymbol = getBaseCurrencySymbol();
+            const targetValue = dataEngine.baseCurrency === 'CNY' ? 
+                               dataEngine.targetAssets : 
+                               convertFromCNY(dataEngine.targetAssets, dataEngine.baseCurrency);
+            document.getElementById('targetAmount').textContent = targetSymbol + Math.round(targetValue).toLocaleString();
             
-            // 更新图表
+            // 更新折线图
             updateChart();
+            
+            // 更新饼图
+            updatePieChart();
             
             // 更新预测数据
             updateProjections();
         }
         
-        // 更新资产卡片（新逻辑：手动资产）
+        // 更新资产卡片（新逻辑：手动资产数组，多币种折算）
         function updateAssetCards() {
             const liquidEl = document.getElementById('liquidAssets');
             const fixedEl = document.getElementById('fixedAssets');
             
-            // 使用新的 dataEngine.manualAssets
-            liquidEl.textContent = formatCurrency(dataEngine.manualAssets.liquid);
-            fixedEl.textContent = formatCurrency(dataEngine.manualAssets.fixed);
+            // 计算现金类资产总额（CNY）
+            let cashTotalCNY = 0;
+            dataEngine.manualAssets.cash.forEach(asset => {
+                cashTotalCNY += convertToCNY(asset.amount, asset.currency);
+            });
+            
+            // 计算另类资产总额（CNY）
+            let alternativeTotalCNY = 0;
+            dataEngine.manualAssets.alternative.forEach(asset => {
+                alternativeTotalCNY += convertToCNY(asset.amount, asset.currency);
+            });
+            
+            // 显示（按本位币）
+            liquidEl.textContent = formatCurrency(cashTotalCNY);
+            fixedEl.textContent = formatCurrency(alternativeTotalCNY);
         }
         
-        // 渲染持仓列表
+        // 渲染持仓列表（多币种显示）
         function renderHoldingsList() {
             const holdingsList = document.getElementById('holdingsList');
             const totalHoldingsValue = document.getElementById('totalHoldingsValue');
@@ -1441,14 +1773,14 @@
                         暂无持仓，点击「添加资产」开始记录
                     </div>
                 `;
-                totalHoldingsValue.textContent = '¥0';
+                totalHoldingsValue.textContent = getBaseCurrencySymbol() + '0';
                 return;
             }
             
-            // 计算总市值
-            let totalValue = 0;
-            holdingsArray.forEach(h => totalValue += h.marketValue);
-            totalHoldingsValue.textContent = formatCurrency(totalValue);
+            // 计算总市值（CNY）
+            let totalValueCNY = 0;
+            holdingsArray.forEach(h => totalValueCNY += h.marketValueCNY);
+            totalHoldingsValue.textContent = formatCurrency(totalValueCNY);
             
             // 渲染持仓项
             holdingsList.innerHTML = holdingsArray.map(holding => {
@@ -1466,25 +1798,54 @@
                 };
                 const marketClass = marketColors[holding.market] || 'bg-gray-500/20 text-gray-400';
                 
+                // 货币符号
+                const currencySymbol = getCurrencySymbol(holding.currency);
+                
+                // 计算到期天数（如果有）
+                let maturityInfo = '';
+                if (holding.maturityDate) {
+                    const today = new Date();
+                    const maturity = new Date(holding.maturityDate);
+                    const daysLeft = Math.ceil((maturity - today) / (1000 * 60 * 60 * 24));
+                    if (daysLeft > 0) {
+                        maturityInfo = `<span class="text-xs text-purple-400 ml-2">📅 距到期 ${daysLeft} 天</span>`;
+                    } else if (daysLeft === 0) {
+                        maturityInfo = `<span class="text-xs text-amber-400 ml-2">⏰ 今日到期</span>`;
+                    } else {
+                        maturityInfo = `<span class="text-xs text-gray-500 ml-2">已到期</span>`;
+                    }
+                }
+                
+                // 年化利率显示
+                const rateInfo = holding.annualRate ? ` | 利率: ${holding.annualRate}%` : '';
+                
+                // 本位币等价
+                const baseCurrencyValue = formatCurrency(holding.marketValueCNY);
+                
                 return `
                     <div class="flex items-center justify-between p-4 bg-gray-800/30 rounded-lg hover:bg-gray-800/50 transition">
                         <div class="flex-1">
                             <div class="flex items-center gap-2 mb-1">
+                                <span class="text-lg">${currencySymbol}</span>
                                 <span class="text-white font-semibold">${holding.name}</span>
                                 <span class="text-xs px-2 py-1 rounded ${marketClass}">${holding.market}</span>
+                                ${maturityInfo}
                             </div>
-                            <div class="text-xs text-gray-500">${holding.symbol}</div>
+                            <div class="text-xs text-gray-500">${holding.symbol}${rateInfo}</div>
                         </div>
                         
                         <div class="text-right">
                             <div class="text-sm text-gray-400">
-                                持仓: ${holding.quantity.toFixed(2)} | 成本: ¥${holding.avgCost.toFixed(4)}
+                                持仓: ${holding.quantity.toFixed(2)} | 成本: ${currencySymbol}${holding.avgCost.toFixed(4)}
                             </div>
                             <div class="text-sm text-gray-400">
-                                现价: ¥${holding.latestPrice.toFixed(4)} | 市值: <span class="text-white font-semibold">${formatCurrency(holding.marketValue)}</span>
+                                现价: ${currencySymbol}${holding.latestPrice.toFixed(4)} | 市值: <span class="text-white font-semibold">${formatCurrencyWithSymbol(holding.marketValue, holding.currency)}</span>
+                            </div>
+                            <div class="text-xs text-gray-500">
+                                本位币: ${baseCurrencyValue}
                             </div>
                             <div class="text-sm ${profitColor} font-semibold mt-1">
-                                ${profitSign}${formatCurrency(profit)} (${profitSign}${profitRate}%)
+                                ${profitSign}${formatCurrencyWithSymbol(profit, holding.currency)} (${profitSign}${profitRate}%)
                             </div>
                         </div>
                     </div>
@@ -1506,9 +1867,168 @@
             assetChart.update('active');
         }
         
-        // 格式化金额
-        function formatCurrency(amount) {
-            return '¥' + Math.round(amount).toLocaleString();
+        // 格式化金额（支持本位币）
+        function formatCurrency(amountCNY, useCurrencySymbol = true) {
+            // 如果本位币是 USD，进行转换
+            let displayAmount = amountCNY;
+            let symbol = '¥';
+            
+            if (dataEngine.baseCurrency === 'USD') {
+                displayAmount = convertFromCNY(amountCNY, 'USD');
+                symbol = '$';
+            }
+            
+            if (useCurrencySymbol) {
+                return symbol + Math.round(displayAmount).toLocaleString();
+            } else {
+                return Math.round(displayAmount).toLocaleString();
+            }
+        }
+        
+        // 格式化特定货币金额
+        function formatCurrencyWithSymbol(amount, currency) {
+            const symbol = getCurrencySymbol(currency);
+            return symbol + Math.round(amount).toLocaleString();
+        }
+        
+        // 切换本位币
+        function switchBaseCurrency(currency) {
+            dataEngine.baseCurrency = currency;
+            
+            // 更新按钮样式
+            const btnCNY = document.getElementById('btnCNY');
+            const btnUSD = document.getElementById('btnUSD');
+            
+            if (currency === 'CNY') {
+                btnCNY.className = 'px-4 py-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold transition';
+                btnUSD.className = 'px-4 py-2 rounded-lg bg-gray-800/50 text-gray-500 border border-gray-700 font-semibold transition';
+            } else {
+                btnCNY.className = 'px-4 py-2 rounded-lg bg-gray-800/50 text-gray-500 border border-gray-700 font-semibold transition';
+                btnUSD.className = 'px-4 py-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold transition';
+            }
+            
+            // 保存设置
+            saveDataToStorage();
+            
+            // 刷新所有显示
+            updateAllUI();
+            
+            console.log(`✓ 切换本位币为: ${currency}`);
+        }
+        
+        // ============= 饼图数据计算与更新 =============
+        // 计算按币种分布的数据
+        function calculateCurrencyDistribution() {
+            const distribution = { CNY: 0, USD: 0, HKD: 0 };
+            
+            // 1. 持仓
+            for (const symbol in dataEngine.holdings) {
+                const holding = dataEngine.holdings[symbol];
+                distribution[holding.currency] = (distribution[holding.currency] || 0) + holding.marketValue;
+            }
+            
+            // 2. 手动资产
+            const categories = ['cash', 'equity', 'fixedIncome', 'alternative'];
+            categories.forEach(category => {
+                if (dataEngine.manualAssets[category]) {
+                    dataEngine.manualAssets[category].forEach(asset => {
+                        distribution[asset.currency] = (distribution[asset.currency] || 0) + asset.amount;
+                    });
+                }
+            });
+            
+            // 转换为本位币
+            const result = [];
+            for (const currency in distribution) {
+                if (distribution[currency] > 0) {
+                    const valueCNY = convertToCNY(distribution[currency], currency);
+                    const displayValue = dataEngine.baseCurrency === 'CNY' ? valueCNY : convertFromCNY(valueCNY, dataEngine.baseCurrency);
+                    result.push({
+                        label: currency,
+                        value: displayValue
+                    });
+                }
+            }
+            
+            return result;
+        }
+        
+        // 计算按资产类别分布的数据
+        function calculateCategoryDistribution() {
+            const distribution = { cash: 0, equity: 0, fixedIncome: 0, alternative: 0 };
+            const categoryNames = {
+                cash: '现金与等现金',
+                equity: '权益类',
+                fixedIncome: '固定收益',
+                alternative: '另类资产'
+            };
+            
+            // 1. 持仓（已折算为 CNY）
+            for (const symbol in dataEngine.holdings) {
+                const holding = dataEngine.holdings[symbol];
+                const category = holding.assetCategory || 'equity';
+                distribution[category] = (distribution[category] || 0) + holding.marketValueCNY;
+            }
+            
+            // 2. 手动资产（折算为 CNY）
+            const categories = ['cash', 'equity', 'fixedIncome', 'alternative'];
+            categories.forEach(category => {
+                if (dataEngine.manualAssets[category]) {
+                    dataEngine.manualAssets[category].forEach(asset => {
+                        distribution[category] += convertToCNY(asset.amount, asset.currency);
+                    });
+                }
+            });
+            
+            // 转换为本位币
+            const result = [];
+            for (const category in distribution) {
+                if (distribution[category] > 0) {
+                    const displayValue = dataEngine.baseCurrency === 'CNY' ? distribution[category] : convertFromCNY(distribution[category], dataEngine.baseCurrency);
+                    result.push({
+                        label: categoryNames[category],
+                        value: displayValue
+                    });
+                }
+            }
+            
+            return result;
+        }
+        
+        // 更新饼图
+        function updatePieChart() {
+            let data;
+            if (pieChartView === 'currency') {
+                data = calculateCurrencyDistribution();
+            } else {
+                data = calculateCategoryDistribution();
+            }
+            
+            pieChart.data.labels = data.map(d => d.label);
+            pieChart.data.datasets[0].data = data.map(d => d.value);
+            pieChart.update('active');
+        }
+        
+        // 切换饼图视图
+        function switchPieChartView(view) {
+            pieChartView = view;
+            
+            // 更新按钮样式
+            const btnCategory = document.getElementById('btnCategoryView');
+            const btnCurrency = document.getElementById('btnCurrencyView');
+            
+            if (view === 'category') {
+                btnCategory.className = 'px-3 py-1 text-xs rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 transition';
+                btnCurrency.className = 'px-3 py-1 text-xs rounded-lg bg-gray-800/50 text-gray-500 border border-gray-700 transition';
+            } else {
+                btnCategory.className = 'px-3 py-1 text-xs rounded-lg bg-gray-800/50 text-gray-500 border border-gray-700 transition';
+                btnCurrency.className = 'px-3 py-1 text-xs rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 transition';
+            }
+            
+            // 更新饼图
+            updatePieChart();
+            
+            console.log(`✓ 切换饼图视图为: ${view}`);
         }
         
         // 计算未来价值
@@ -1634,6 +2154,66 @@
             }
         });
         
+        // 初始化饼图
+        const pieCtx = document.getElementById('pieChart').getContext('2d');
+        let pieChartView = 'category'; // 当前视图：'category' 或 'currency'
+        const pieChart = new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    backgroundColor: [
+                        'rgba(212, 175, 55, 0.8)',   // 金色
+                        'rgba(80, 200, 120, 0.8)',   // 翡翠绿
+                        'rgba(100, 150, 255, 0.8)',  // 蓝色
+                        'rgba(255, 100, 150, 0.8)',  // 粉色
+                        'rgba(150, 100, 255, 0.8)'   // 紫色
+                    ],
+                    borderColor: '#121212',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: {
+                            color: '#e0e0e0',
+                            padding: 15,
+                            font: {
+                                size: 12
+                            }
+                        }
+                    },
+                    tooltip: {
+                        backgroundColor: 'rgba(18, 18, 18, 0.9)',
+                        titleColor: '#D4AF37',
+                        bodyColor: '#e0e0e0',
+                        borderColor: 'rgba(212, 175, 55, 0.3)',
+                        borderWidth: 1,
+                        padding: 12,
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const symbol = getBaseCurrencySymbol();
+                                const percentage = ((value / context.dataset.data.reduce((a, b) => a + b, 0)) * 100).toFixed(1);
+                                return `${label}: ${symbol}${Math.round(value).toLocaleString()} (${percentage}%)`;
+                            }
+                        }
+                    }
+                },
+                animation: {
+                    duration: 800,
+                    easing: 'easeInOutQuart'
+                }
+            }
+        });
+        
         // ============= 滑动条事件 =============
         const slider = document.getElementById('returnRateSlider');
         const returnRateDisplay = document.getElementById('returnRate');
@@ -1675,11 +2255,17 @@
             // 第一步：从 localStorage 加载数据
             loadDataFromStorage();
             
-            // 第二步：初始化滑动条
+            // 第二步：初始化本位币按钮状态
+            if (dataEngine.baseCurrency === 'USD') {
+                document.getElementById('btnCNY').className = 'px-4 py-2 rounded-lg bg-gray-800/50 text-gray-500 border border-gray-700 font-semibold transition';
+                document.getElementById('btnUSD').className = 'px-4 py-2 rounded-lg bg-amber-500/20 text-amber-400 border border-amber-500/30 font-semibold transition';
+            }
+            
+            // 第三步：初始化滑动条
             slider.value = dataEngine.returnRate;
             returnRateDisplay.textContent = dataEngine.returnRate.toFixed(1);
             
-            // 第三步：初始化 UI
+            // 第四步：初始化 UI
             updateProgress();
             updateProjections();
             updateAllUI();
